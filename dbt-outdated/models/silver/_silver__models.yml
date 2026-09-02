@@ -1,0 +1,74 @@
+version: 2
+
+models:
+  # --- TWITCH ---
+  - name: silver_twitch_dedupe
+    description: "Tabela deduplicada de streams da Twitch via ROW_NUMBER. Base para o histórico temporal."
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: sk_deduplication
+        data_type: bigint
+        constraints:
+          - type: not_null
+
+      - name: ingested_at_utc
+        data_type: timestamp
+        constraints:
+          - type: not_null
+
+      - name: twitch_game_id
+        data_type: string
+        constraints:
+          - type: not_null
+
+      - name: game_name
+        data_type: string
+        constraints:
+          - type: not_null
+
+      - name: viewer_count
+        data_type: bigint
+        constraints:
+          - type: not_null
+        data_tests:
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: ">= 0"
+
+  # --- STEAM ---
+  - name: silver_steam_dedupe
+    description: "Dados deduplicados da Steam via Windows Function"
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: sk_deduplication
+        data_type: bigint
+        constraints:
+          - type: not_null
+          
+      - name: ingested_at_utc
+        data_type: timestamp
+        constraints:
+          - type: not_null
+
+      - name: steam_game_id
+        data_type: string
+        constraints:
+          - type: not_null
+
+      - name: game_name
+        data_type: string
+        constraints:
+          - type: not_null
+
+      - name: peak_players
+        data_type: bigint
+        constraints:
+          - type: not_null
+        data_tests:
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: ">= 0"

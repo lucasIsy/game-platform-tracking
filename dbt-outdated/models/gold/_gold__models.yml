@@ -1,0 +1,103 @@
+version: 2
+
+models:
+  - name: fact_twitch_steam_daily
+    description: "Métricas históricas dos jogos na Twitch e Steam agrupadas mensalmente"
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: sk_game_performance
+        data_type: bigint
+        constraints:
+          - type: not_null
+      
+      - name: Month
+        data_type: date
+        constraints:
+          - type: not_null
+      
+      - name: twitch_game_id
+        data_type: string
+        constraints:
+          - type: not_null
+      
+      - name: steam_game_id
+        data_type: string
+        constraints:
+          - type: not_null
+
+      - name: game_name
+        data_type: string
+        constraints:
+          - type: not_null
+
+      - name: total_views
+        data_type: bigint
+        constraints:
+          - type: not_null
+
+      - name: peak_players
+        data_type: bigint
+        constraints:
+          - type: not_null
+
+  - name: gold_steam_daily
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: sk_game_performance
+        data_type: bigint
+        constraints:
+          - type: not_null
+
+      - name: Month
+        data_type: date
+        constraints:
+          - type: not_null
+
+      - name: steam_game_id
+        data_type: string
+        constraints:
+          - type: not_null
+
+      - name: game_name
+        data_type: string
+        constraints:
+          - type: not_null
+
+      - name: peak_players
+        data_type: bigint
+        constraints:
+          - type: not_null
+  
+  - name: gold_twitch_daily
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: sk_game_performance
+        data_type: bigint
+        constraints:
+          - type: not_null
+
+      - name: Month
+        data_type: date
+        constraints:
+          - type: not_null
+
+      - name: twitch_game_id
+        data_type: string
+        constraints:
+          - type: not_null
+
+      - name: game_name
+        data_type: string
+        constraints:
+          - type: not_null
+
+      - name: total_views
+        data_type: bigint
+        constraints:
+          - type: not_null

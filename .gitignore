@@ -1,0 +1,7 @@
+logs
+config
+__pycache__
+logs/
+**/target/
+**/dbt_packages/
+.env
