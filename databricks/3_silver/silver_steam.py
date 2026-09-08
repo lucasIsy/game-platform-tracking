@@ -1,15 +1,20 @@
 import dlt as dp
 
-dp.create_streaming_table(
+@dp.table(
     name="silver_steam",
-    comment="Tabela deduplicada da Steam",
-    table_properties={"quality": "silver"}
+    comment="",
+    table_properties={"quality": "silver"},
+    cluster_by=["ingested_at_utc", "steam_game_id"]
 )
-
-dp.apply_changes(
-    target="silver_steam",
-    source="stg_steam",
-    keys=["ingested_at_utc", "steam_game_id"],  
-    sequence_by="ingested_at_utc",              
-    stored_as_scd_type="1"                      
-)
+def silver_steam():
+    return (
+        dp.read_stream("stg_steam")
+        .withWatermark("ingested_at_utc", "1 minute")
+        .dropDuplicates(["sk_deduplication"])
+        .select(
+            "steam_game_id",
+            "game_name",
+            "peak_players",
+            "ingested_at_utc"
+        )
+    )

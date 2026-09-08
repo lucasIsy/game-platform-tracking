@@ -1,13 +1,11 @@
 import dlt as dp
-from pyspark.sql.functions import col, xxhash64, to_timestamp
+from pyspark.sql.functions import col, xxhash64, timestamp_seconds
 
 @dp.table(
     name="stg_steam",
-    comment="Padronização de tipos e chaves para Steam",
+    comment="",
     table_properties={"quality": "staging"}
 )
-# Regras de Qualidade para manutenibilidade
-@dp.expect_or_drop("valid_steam_game_id", "steam_game_id IS NOT NULL")
 def stg_steam():
     return (
         dp.read_stream("bronze_steam")
@@ -16,6 +14,6 @@ def stg_steam():
             col("id").alias("steam_game_id"),
             col("jogo").alias("game_name"),
             col("qtd_jogadores").alias("peak_players"),
-            to_timestamp(col("ingestion_timestamp_utc")).alias("ingested_at_utc")
+           timestamp_seconds(col("ingestion_timestamp_utc")).alias("ingested_at_utc")
         )
     )

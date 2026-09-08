@@ -1,15 +1,17 @@
 import dlt as dp
-from pyspark.sql.functions import sum as _sum
+from pyspark.sql.functions import col, sum as _sum
 
 @dp.table(
     name="silver_twitch",
-    comment="Agregação estática (Materialized View) de views da Twitch",
-    table_properties={"quality": "silver"}
+    comment="",
+    table_properties={"quality": "silver"},
+    cluster_by=["ingested_at_utc", "twitch_game_id"]
 )
 def silver_twitch():
-    # Leitura como Materialized View (Lote em vez de Stream)
     return (
-        dp.read("stg_twitch")
+        dp.read_stream("stg_twitch")
+        .withWatermark("ingested_at_utc", "1 minute")
+        .dropDuplicates(["sk_deduplication"])
         .groupBy(
             "twitch_game_id",
             "game_name",
