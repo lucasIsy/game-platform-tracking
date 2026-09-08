@@ -1,55 +1,71 @@
-![](./_assets/FluxoSteamTwitch.svg)
+![](_assets/FluxoPipeline.svg)
 
-# Qual o objetivo do pipeline?
-Para investigar quais decisões fizeram jogos de baixo orçamento alcançarem 100 mil jogadores em apenas 2 meses de lançamento, eu precisaria do histórico de métricas para fazer a correlação, mas as principais plataformas Steam(jogos) e Twitch(lives) não liberam esse histórico e apenas informam a quantidade de jogadores e lives.
+# Introdução
+Há um tempo atrás eu queria demonstrar como a criação de conteúdo estava aumentando exponencialmente as vendas de jogos cooperativos na Steam, porém, a própria Steam e Twitch não liberam os dados históricos via API e qualquer solução de webscrapping estaria com os dias contados por conta da Cloud Flare.
 
-A solução foi criar uma arquitetura de dados ELT que extrai os dados simultâneamente a cada 10 minutos, lida com os problemas da API da Twitch e otimiza o processamento de 133K dados por dias no Databricks.
+Essa arquitetura foi criada para monitorar as plataformas oficiais e criar o meu próprio `SteamDB` ou `TwitchTracker`
 
-> O SteamDB guarda esse histórico, mas não possuem uma api de extração e web scrapping não é uma solução a longo prazo.
+> Com esse monitoramento e dados históricos foi possível tirar a [minha investigação](https://app.powerbi.com/view?r=eyJrIjoiMzYzZGExNjQtZDQzYy00OTQxLWI0ZWUtNjg5MjU3ODA2ODYwIiwidCI6IjllOTQ2M2EwLWMyNTEtNGNmNi04NDgxLWJlNzRmNWY2YzQ0YiJ9) do papel.
 
-## Problema da Steam e Twitch
-Como citado, esses dados não estão disponíveis ao público comum, mas apenas aos próprios desenvolvedores do jogo. Porém, essas duas plataformas possuem peculiaridades relevantes na hora de criar uma solução:
+## Guia Rápido da Aquitetura
 
-**Twitch:**
-- Necessita de autenticação utilizando Oauth e token
-- Não existe um endpoint que entrega diretamente a quantidade de lives feitas daquele jogo ou lista de jogos, sendo necessário extrair todas as lives(por paginação) e processá-las para normalizar com os dados da Steam.
-- Por causa da dinamicidade do dados vindos do endpoint, pode ocorrer duplicações no momento da paginação.
+### 1. [Orquestração](./airflow-docker) 
+Possui os **scripts** de `extração`, `autenticação`(Steam e Twitch), `pré-processamento` e a `lista de jogos monitorados`.
 
-**Steam** 
-- O método de extração não precisa de autenticação, mas existem limites de request
+### 2. [APIs e seus problemas](airflow-docker) 
+Aqui você encontra os `endpoints` utilizados, `como obter os tokens` de autenticação e o `problema na API da Twitch` que mudou a forma da transformação.
 
----
-
-## Endpoints utilizados
-**Steam:**
-GetNumberOfCurrentPlayers/v1/ [Documentação Oficial](https://partner.steamgames.com/doc/webapi/isteamuserstats)
-
-**Twitch:**
-Get Streams - helix/streams [Documentação Oficial](https://dev.twitch.tv/docs/api/reference#get-streams)
+### 3. [Transformação dos Dados - Databricks ETL](databricks)
+Inclui os `códigos PySpark`, a `lógica incremental`, as `tabela DLT` e `deduplicação e joins via hash`.
 
 ---
 
-## Como pegar os IDs dos jogos/categorias?
-### Steam
-O id dos apps ficam no url da página, acessando pelo aplicativo ou navegador. Caso o processo manual não seje viável, é necessário criar uma automação utilizando o endpoint [GetAppList/v1/](https://partner.steamgames.com/doc/webapi/IStoreService#GetAppList).
-
-> Steam token necessária
-
-![](./_assets/EncontrandoID.png)
-
-### Twitch
-Utiliza o endpoint [helix/games](https://dev.twitch.tv/docs/api/reference#get-games) passando o nome exato do jogo ou categoria, mas é necessário autenticação.
-
-> A ideia é passar os nomes na variável do airflow, pois se quiser adicionar ou remover mais jogos/categorias é um processo mais fácil.
+### Decisões de Arquitetura e Evolução
+* **Trade-off de Ingestão:** Na prática a extração e orquestração devem ser *serverless* por conta do tempo de espera, mas o Airflow, Docker e Python foram utilizados também para por em prática meus estudos sobre eles.
+* **Evolução da Stack:** O pipeline substituiu a abordagem inicial (Notebooks + dbt Core) por uma solução unificada dentro dos recursos nativos de ETL/Pipelines do Databricks.
+* **Campos Críticos:**
+  * ingested_at - gerado no airflow e é igual para todos os itens do batch
+  * Streamer_ID - encontrados nos dados da Twitch e é a base para a deduplicação na silver.
+  * game_name - está dentro dos dados da Steam e Twitch e será utilizado para unir as tabelas na Gold.
 
 ---
 
-``` text
-Guia das Pastas
-├── 1_airflow_docker/ 
-├── 2_databricks/
-├── 3_dbt/
-├── 5_problemas_e_otimizações/
-│   ├── assets/
-└── README.MD
-```
+### Camadas de Dados (Medallion Architecture)
+
+* **Bronze:**  
+  * O pipeline é acionado a cada novo lote de arquivos Parquet gravados no catalogo.
+  * Cada arquivo novo é inserido incrementalmente dentro das tabelas delta.
+  * **Data Quality:** Validação via Great Expectations para garantir formato de *timestamp* UNIX válido e a ausência do ID dos streamers e dos jogos na Steam.
+
+* **Staging:**  
+  * Padronização de nomenclatura de colunas e schemas.
+  * Geração do hash via xxhash64 para deduplicação na Silver
+
+* **Silver (Tratamento & Agregação):**  
+  * Deduplicação dos registros utilizando as chaves geradas na Staging.  
+  * **Agregação Twitch:** A API não retorna as visualizações de cada jogo na plataforma, mas retorna uma lista de todas as lives ligadas sobre de determinado jogo. Com isso é necessário agregar essas lives individuais e obter as métricas desses jogos naquele instante.
+  * A partir da silver, o hash da deduplicação gerado não é mais relevante.
+
+* **Gold (Agregação e Centralização):**
+  * Os dados são centralizados em uma tabela fato utilizando inner join via hash(Data + Game_Name)
+  * Centralizada na tabela fato `fact_daily_metrics`, que consolida os instantâneos (*snapshots*) temporais de quantidade de lives, volume de pesquisas e jogadores simultâneos. 
+  * **Casos de Uso:** Correlação entre jogadores e criadores de conteúdos, além da avaliação de impacto de *patches* e novos lançamentos no engajamento dos jogos.
+
+| hash_id | date | game_name | steam_players | total_lives | hours_watched | total_search |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| `a1b2c3d4` | 2026-09-01 | Lethal Company | 45.200 | 1.250 | 320.400 | 78 |
+| `e5f6g7h8` | 2026-09-02 | Content Warning | 12.800 | 430 | 95.120 | 32 |
+| `i9j0k1l2` | 2026-09-03 | R.E.P.O. | 89.600 | 3.100 | 1.150.000 | 100 |
+| `m3n4o5p6` | 2026-09-04 | PEAK | 5.400 | 120 | 18.750 | 14 |
+| `q7r8s9t0` | 2026-09-05 | MIMESIS | 22.100 | 890 | 140.300 | 45 |
+| `u1v2w3x4` | 2026-09-06 | Big Walk | 34.700 | 1.050 | 210.800 | 61 |
+
+### Destino Final da Arquitetura
+
+<p align="center">
+<a href="https://app.powerbi.com/view?r=eyJrIjoiMzYzZGExNjQtZDQzYy00OTQxLWI0ZWUtNjg5MjU3ODA2ODYwIiwidCI6IjllOTQ2M2EwLWMyNTEtNGNmNi04NDgxLWJlNzRmNWY2YzQ0YiJ9">Ver a Análise dos Dados</a>
+  <br>
+  <a href="https://app.powerbi.com/view?r=eyJrIjoiMzYzZGExNjQtZDQzYy00OTQxLWI0ZWUtNjg5MjU3ODA2ODYwIiwidCI6IjllOTQ2M2EwLWMyNTEtNGNmNi04NDgxLWJlNzRmNWY2YzQ0YiJ9" target="_blank">
+    <img src="./_assets/Projeto-analise-dados.webp" alt="Projeto Análise de Dados" width="70%">
+  </a>
+</p>
