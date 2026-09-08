@@ -113,9 +113,14 @@ def twitch_steam_pipeline():
 
     # Chama as tasks
     # Garantir que os resultados da steam/twitch tenham o mesmo tempo de ingestão para futuros joins
-    ingestion_timestamp_utc = datetime.now().isoformat()
-    get_twitch_data(ingestion_timestamp_utc, ts_nodash="{{ ts_nodash }}")
-    get_steam_data(ingestion_timestamp_utc, ts_nodash="{{ ts_nodash }}" )
+    get_twitch_data(
+        ingestion_time="{{ logical_date.int_timestamp }}",
+        ts_nodash="{{ ts_nodash }}"
+    )
+    get_steam_data(
+        ingestion_time="{{ logical_date.int_timestamp }}",
+        ts_nodash="{{ ts_nodash }}"
+    )
 
 # --- CHAMADA DO DAG ---
 twitch_steam_pipeline()
