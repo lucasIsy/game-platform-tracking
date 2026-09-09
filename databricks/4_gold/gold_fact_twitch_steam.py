@@ -1,23 +1,48 @@
 import dlt as dp
-from pyspark.sql.functions import col, coalesce, lit
+from pyspark.sql.functions import col, to_date, max as _max, lower, trim, coalesce, xxhash64
 
 @dp.table(
-    name="fact_twitch_steam",
-    comment="Tabela Fato: Cruzamento (Inner Join) consolidado entre Twitch e Steam",
-    table_properties={"quality": "gold"}
+    name="gold_game_analytics_daily",
+    comment="",
+    table_properties={"quality": "gold"},
+    cluster_by=["month", "sk_game_performance"]
 )
-def fact_game_performance():
-    t = dp.read("gold_twitch_daily").alias("t")
-    s = dp.read("gold_steam_daily").alias("s")
+def gold_game_analytics_daily():
+    steam_daily = (
+        dp.read("silver_steam")
+        .withColumn("month", to_date(col("ingested_at_utc")))
+        .withColumn("game_name", lower(trim(col("game_name"))))
+        .withColumn("sk_game_performance", xxhash64(col("month"), col("game_name")))
+        .groupBy("sk_game_performance", "month")
+        .agg(
+            _max("game_name").alias("steam_game_name"),
+            _max("peak_players").alias("steam_peak_players") 
+        )
+    )
 
-    df_join = t.join(s, on="sk_game_performance", how="inner")
+    twitch_daily = (
+        dp.read("silver_twitch")
+        .withColumn("month", to_date(col("ingested_at_utc")))
+        .withColumn("game_name", lower(trim(col("game_name"))))
+        .withColumn("sk_game_performance", xxhash64(col("month"), col("game_name")))
+        .groupBy("sk_game_performance", "month")
+        .agg(
+            _max("game_name").alias("twitch_game_name"),
+            _max("viewer_count").alias("twitch_peak_views")
+        )
+    )
 
-    return df_join.select(
-        col("t.twitch_game_id"),
-        col("s.steam_game_id"),
-        coalesce(col("t.game_name"), col("s.game_name"), lit("N/A")).alias("game_name"),
-        coalesce(col("t.Month"), col("s.Month"), lit("1900-01-01")).alias("Month"),
-        col("t.total_views"),
-        col("s.peak_players"),
-        col("sk_game_performance")
+    return (
+        steam_daily.join(
+            twitch_daily,
+            on=["sk_game_performance", "month"],
+            how="inner"
+        )
+        .select(
+            col("sk_game_performance"),
+            col("month"),
+            coalesce(col("steam_game_name"), col("twitch_game_name")).alias("game_name"),
+            col("steam_peak_players"),
+            col("twitch_peak_views")
+        )
     )
