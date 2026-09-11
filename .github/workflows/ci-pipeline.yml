@@ -33,8 +33,10 @@ jobs:
     - name: Validação Estática de Código (Linting)
       run: |
         # Encontrar erros de sintaxe
-        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+        - name: Validação Estática de Código (Linting)
+      run: |
+        flake8 . --count --select=E9,F63,F7,F82 --builtins=spark,dlt --show-source --statistics
+        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --builtins=spark,dlt --statistics
 
     - name: Executar Testes Unitários(PySpark)
       run: |
