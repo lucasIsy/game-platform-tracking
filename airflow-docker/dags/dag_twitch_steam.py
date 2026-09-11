@@ -14,6 +14,8 @@ from scripts.extractors import get_steam_metrics
 from scripts.transforms import steam_data_to_stream_format
 from scripts.transforms import twitch_data_to_stream_format
 from scripts.loaders import upload_to_databricks
+from scripts.alerts import send_discord_alert
+from scripts.token_monitor import check_databricks_token_expiration
 
 # =============================================================================
 # --- ARGUMENTOS PADRÃO DO DAG ---
@@ -24,8 +26,13 @@ default_args = {
     'depends_on_past': False,
     'email_on_failure': False,
     'email_on_retry': False,
-    'retries': 1,
+
+    'retries': 3,
     'retry_delay': timedelta(minutes=2),
+    'retry_exponential_backoff': True,
+    'max_retry_delay': timedelta(minutes=10),
+
+    'on_failure_callback': send_discord_alert,
 }
 
 # =============================================================================
@@ -47,6 +54,12 @@ def twitch_steam_pipeline():
     1. Ingestão dos dados da Twitch e Steam via API.
     2. Converte os dados para formato stream e faz o carregamento para o Databricks.
     """
+    # --- Task 0: Verifica a expiração do token do databricks ---
+    @task(task_id='monitor_databricks_token')
+    def task_check_token():
+        check_databricks_token_expiration(days_threshold=7)
+    check_token = task_check_token()
+
     # --- Task 1: Extrai os dados da twitch e faz o upload para o databricks ---
     @task
     def get_twitch_data(ingestion_time:str, ts_nodash):
