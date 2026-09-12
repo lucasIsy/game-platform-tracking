@@ -1,4 +1,4 @@
-![](_assets/FluxoPipeline.svg)
+![](_assets/FluxoPipeline.jpg)
 
 # Introdução
 Há um tempo atrás eu queria demonstrar como a criação de conteúdo estava aumentando exponencialmente as vendas de jogos cooperativos na Steam, porém, a própria Steam e Twitch não liberam os dados históricos via API e qualquer solução de webscrapping estaria com os dias contados por conta da Cloud Flare.
@@ -48,8 +48,7 @@ Inclui os `códigos PySpark`, a `lógica incremental`, as `tabela DLT` e `dedupl
 
 * **Gold (Agregação e Centralização):**
   * Os dados são centralizados em uma tabela fato utilizando inner join via hash(Data + Game_Name)
-  * Centralizada na tabela fato `fact_daily_metrics`, que consolida os instantâneos (*snapshots*) temporais de quantidade de lives, volume de pesquisas e jogadores simultâneos. 
-  * **Casos de Uso:** Correlação entre jogadores e criadores de conteúdos, além da avaliação de impacto de *patches* e novos lançamentos no engajamento dos jogos.
+  * Todas as métricas(steam, twitch e trends) estão atreladas a uma data, sempre mostrando a maior daquele dia.
 
 | hash_id | date | game_name | steam_players | total_lives | hours_watched | total_search |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
